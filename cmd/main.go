@@ -16,7 +16,7 @@ func main() {
 	handler := di.InitHandler()
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET /ws", handler.MessageHandler.WsHandler())
+	mux.HandleFunc("/ws", handler.MessageHandler.WsHandler())
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))

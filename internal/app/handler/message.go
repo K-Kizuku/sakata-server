@@ -35,7 +35,7 @@ func (mh *MessageHandler) WsHandler() func(http.ResponseWriter, *http.Request) {
 		errCh := make(chan error)
 		doneCh := make(chan struct{})
 		go mh.ms.ReadPump(r.Context(), conn, errCh, doneCh)
-		go mh.ms.WritePump(r.Context(), conn, errCh, doneCh)
+		// go mh.ms.WritePump(r.Context(), conn, errCh, doneCh)
 		select {
 		case err := <-errCh:
 			log.Println("error:", err)

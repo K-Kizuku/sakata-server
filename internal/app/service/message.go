@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"iter"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/K-Kizuku/sakata-server/internal/app/repository"
@@ -13,14 +15,46 @@ import (
 type IMessageService interface {
 	ReadPump(ctx context.Context, conn *websocket.Conn, errCh chan<- error, doneCh chan<- struct{})
 	WritePump(ctx context.Context, conn *websocket.Conn, errCh chan<- error, doneCh chan<- struct{})
+	JoinRoom(ctx context.Context, conn *websocket.Conn, roomID string) error
+	LeaveRoom(ctx context.Context, conn *websocket.Conn, roomID string) error
 }
 
 type MessageService struct {
-	mr repository.IMessageRepository
+	mr   repository.IMessageRepository
+	room map[string][]*websocket.Conn
+	mux  sync.RWMutex
 }
 
 func NewMessageService(mr repository.IMessageRepository) IMessageService {
 	return &MessageService{mr: mr}
+}
+
+func (ms *MessageService) JoinRoom(ctx context.Context, conn *websocket.Conn, roomID string) error {
+	ms.mux.Lock()
+	defer ms.mux.Unlock()
+
+	if _, ok := ms.room[roomID]; ok {
+		ms.room[roomID] = append(ms.room[roomID], conn)
+	} else {
+		ms.room[roomID] = make([]*websocket.Conn, 0, 10) // 10人くらいを想定
+		ms.room[roomID] = append(ms.room[roomID], conn)
+	}
+	return nil
+}
+
+func (ms *MessageService) LeaveRoom(ctx context.Context, conn *websocket.Conn, roomID string) error {
+	ms.mux.Lock()
+	defer ms.mux.Unlock()
+
+	if _, ok := ms.room[roomID]; ok {
+		for i, c := range ms.room[roomID] {
+			if c == conn {
+				ms.room[roomID] = append(ms.room[roomID][:i], ms.room[roomID][i+1:]...)
+				break
+			}
+		}
+	}
+	return nil
 }
 
 func (ms *MessageService) ReadPump(ctx context.Context, conn *websocket.Conn, errCh chan<- error, doneCh chan<- struct{}) {
@@ -41,6 +75,11 @@ func (ms *MessageService) ReadPump(ctx context.Context, conn *websocket.Conn, er
 			if err := ms.mr.AddMessage(ctx, timestamp, string(message)); err != nil {
 				log.Println("add message")
 
+				errCh <- err
+				return
+			}
+			if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
+				log.Println("write message")
 				errCh <- err
 				return
 			}
@@ -75,7 +114,6 @@ func (ms *MessageService) WritePump(ctx context.Context, conn *websocket.Conn, e
 			// for _, message := range messages {
 			// 	messageCount[message]++
 			// }
-			log.Println("直近5秒間のメッセージ集計:", messages)
 			m, err := json.Marshal(Messages{Messages: messages})
 			if err != nil {
 				errCh <- err
@@ -84,6 +122,18 @@ func (ms *MessageService) WritePump(ctx context.Context, conn *websocket.Conn, e
 			err = conn.WriteMessage(websocket.TextMessage, m)
 			if err != nil {
 				errCh <- err
+				return
+			}
+		}
+	}
+}
+
+func (ms *MessageService) getClientByRoomID(id string) iter.Seq[*websocket.Conn] {
+	ms.mux.Lock()
+	defer ms.mux.Unlock()
+	return func(yield func(*websocket.Conn) bool) {
+		for _, v := range ms.room[id] {
+			for !yield(v) {
 				return
 			}
 		}
