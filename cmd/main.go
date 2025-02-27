@@ -22,6 +22,9 @@ func main() {
 		w.Write([]byte("ok"))
 	})
 
+	mux.HandleFunc("POST /theme", handler.MessageHandler.ThemeHandler())
+	mux.HandleFunc("POST /judge", handler.MessageHandler.JudgeHandler())
+
 	server := &http.Server{
 		Addr:    ":8080",
 		Handler: mux,

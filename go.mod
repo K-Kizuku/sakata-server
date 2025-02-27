@@ -4,6 +4,7 @@ go 1.24.0
 
 require (
 	github.com/dgraph-io/ristretto v0.2.0
+	github.com/google/uuid v1.6.0
 	github.com/google/wire v0.6.0
 	github.com/gorilla/websocket v1.5.3
 )
