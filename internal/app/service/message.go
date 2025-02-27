@@ -78,17 +78,22 @@ func (ms *MessageService) ReadPump(ctx context.Context, conn *websocket.Conn, er
 				errCh <- err
 				return
 			}
+			var s Schema
+			if err := json.Unmarshal(message, &s); err != nil {
+				log.Println("json unmarshal", err)
+			}
 
 			timestamp := time.Now().Unix()
 			if err := ms.mr.AddMessage(ctx, timestamp, string(message)); err != nil {
 				log.Println("add message", err)
 
 			}
-			s := Schema{
+			p := Schema{
 				EventType: "message",
-				Content:   string(message),
+				Content:   s.Content,
+				Name:      s.Name,
 			}
-			m, err := json.Marshal(s)
+			m, err := json.Marshal(p)
 			if err != nil {
 				log.Println("json marshal", err)
 			}
@@ -124,6 +129,7 @@ func (ms *MessageService) WritePump(ctx context.Context, conn *websocket.Conn, e
 			s := Schema{
 				EventType: "answer",
 				Content:   ans,
+				Name:      "AI",
 			}
 			m, err := json.Marshal(s)
 			if err != nil {
